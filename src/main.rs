@@ -77,7 +77,8 @@ fn main() {
                 println!("Res {:?}", res);
                 let a = unsafe {ptrace::ptrace(ptrace::Request::PTRACE_GETREGS, pid, addr, m)};
                 let mem: &mut [u64; buffer_size]  = unsafe { &mut *(m as *mut [u64; buffer_size]) };
-                println!("reg: {} ", (mem[offset]));
+                println!("orig rax: {} ", (mem[offset]));
+                println!("orig rdi: {} ", (mem[offset-1]));
 //                for x in mem.iter() { 
 //                    println!("state: {} | {}", (*x) as u64, x);
 //                }
