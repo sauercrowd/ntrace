@@ -8,7 +8,12 @@ use nix::sys::signal::Signal;
 use nix::sys::ptrace;
 use std::mem;
 use std::str::FromStr;
-//fn attach(pid: i64) -> Result<
+
+struct PidRegisterSession{
+    buffer: *mut libc::c_void,
+    pid: nix::unistd::Pid,
+}
+
 
 struct Registers {
     r15: u64,
@@ -40,8 +45,49 @@ struct Registers {
     gs: u64
 }
 
-const buffer_size: usize = 27;
-const offset: usize = 15;
+impl Registers{
+    fn from_pid(pid: nix::unistd::Pid) -> Registers{
+
+        const buffer_size: usize = 27;
+        unsafe{
+            let buffer_raw = libc::malloc(buffer_size*mem::size_of::<u64>()) as *mut libc::c_void;
+            ptrace::ptrace(ptrace::Request::PTRACE_GETREGS, pid, std::ptr::null_mut(), buffer_raw).unwrap();
+            let buffer: &mut [u64; buffer_size]  = &mut *(buffer_raw as *mut [u64; buffer_size]);
+            let regs = Registers{
+                r15: buffer[0],
+                r14: buffer[1],
+                r13: buffer[2],
+                r12: buffer[3],
+                rbp: buffer[4],
+                rbx: buffer[5],
+                r11: buffer[6],
+                r10: buffer[7],
+                r9: buffer[8],
+                r8: buffer[9],
+                rax: buffer[10],
+                rcx: buffer[11],
+                rdx: buffer[12],
+                rsi: buffer[13],
+                rdi: buffer[14],
+                orig_rax: buffer[15],
+                rip: buffer[16],
+                cs: buffer[17],
+                eflags: buffer[18],
+                rsp: buffer[19],
+                ss: buffer[20],
+                fs_base: buffer[21],
+                gs_base: buffer[22],
+                ds: buffer[23],
+                es: buffer[24],
+                fs: buffer[25],
+                gs: buffer[26]
+            };
+            libc::free(buffer_raw);
+            return regs;
+        }
+    }
+}
+
 fn main() {
 
     let args: Vec<String> = std::env::args().collect();
@@ -64,38 +110,13 @@ fn main() {
         Err(res) => println!("{:?}", res)
     }
 
-    //buffer
-    let m: *mut libc::c_void;
-
-    let m = unsafe { libc::malloc(buffer_size*mem::size_of::<u64>()) as *mut libc::c_void };
-    let addr: ptrace::AddressType = m as *mut ffi::c_void;
-
-
     loop{
         match waitpid(pid, Some(<WaitPidFlag>::WSTOPPED)) {
             Ok(res) => {
                 println!("Res {:?}", res);
-                let a = unsafe {ptrace::ptrace(ptrace::Request::PTRACE_GETREGS, pid, addr, m)};
-                let mem: &mut [u64; buffer_size]  = unsafe { &mut *(m as *mut [u64; buffer_size]) };
-                println!("orig rax: {} ", (mem[offset]));
-                println!("orig rdi: {} ", (mem[offset-1]));
-//                for x in mem.iter() { 
-//                    println!("state: {} | {}", (*x) as u64, x);
-//                }
-
-//                unsafe{println!("Address {:?} {:?}", addr, *m)};
-
-//                let read_content = ptrace::read(pid, addr);
-//                match read_content{
-//                    Ok(c) => println!("MEMORY {:?}", c),
-//                    _ => println!("NO MEMORY"),
-//                }
-                 let syscall = nix::sys::ptrace::syscall(pid);
-//                println!("Syscall {:?}", syscall);
-
-
-//                let r = ptrace::cont(pid, None);
-//                println!("Cont {:?}", r)
+                let regs = Registers::from_pid(pid);
+                println!("RDI {}", regs.rdi);
+                let syscall = nix::sys::ptrace::syscall(pid);
             }
             _ => {},
         }
